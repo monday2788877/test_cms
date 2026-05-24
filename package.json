@@ -1,0 +1,41 @@
+{
+  "name": "@real-estate/payload-admin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@1.22.22",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "start:docker": "node scripts/wait-for-db.mjs && if [ \"${PAYLOAD_SCHEMA_PUSH_ON_START:-true}\" = \"true\" ]; then yarn bootstrap:schema; else yarn payload migrate; fi && yarn build && yarn start",
+    "generate:types": "payload generate:types",
+    "generate:importmap": "payload generate:importmap",
+    "seed": "tsx src/seed.ts",
+    "postinstall": "node scripts/patch-payload-load-env.mjs",
+    "payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload",
+    "bootstrap:schema": "cross-env NODE_ENV=development NEXT_PHASE=phase-production-server tsx scripts/bootstrap-schema.ts",
+    "start:railway": "node scripts/wait-for-db.mjs && if [ \"${PAYLOAD_SCHEMA_PUSH_ON_START:-true}\" = \"true\" ]; then yarn bootstrap:schema; else yarn payload migrate; fi && yarn build && yarn start"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.84.1",
+    "@payloadcms/next": "3.84.1",
+    "@payloadcms/richtext-lexical": "3.84.1",
+    "@payloadcms/storage-s3": "3.84.1",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.7",
+    "graphql": "^16.10.0",
+    "next": "16.2.6",
+    "payload": "3.84.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.6.3"
+  }
+}

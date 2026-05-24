@@ -1,0 +1,131 @@
+import type { CollectionConfig } from 'payload'
+import { isAdmin } from '../access/isAdmin'
+
+export const DEFAULT_APP_CONFIG = {
+  key: 'default',
+  maxImagesPerProperty: 5,
+  maxVideosPerProperty: 1,
+  allowUserRegistration: true,
+  allowGoogleLogin: true,
+  allowGoogleAutoCreateUser: true,
+  allowUserCreateProperty: true,
+  allowUserEditProperty: true,
+  autoApproveUserProperties: false,
+  maxPendingPropertiesPerUser: 20,
+}
+
+export const AppConfigs: CollectionConfig = {
+  slug: 'app-configs',
+  labels: {
+    singular: 'App Config',
+    plural: 'App Configs',
+  },
+  admin: {
+    useAsTitle: 'key',
+    group: 'System Config',
+    defaultColumns: ['key', 'updatedAt'],
+    description: 'Cấu hình động cho website: giới hạn ảnh/video, đăng ký user, đăng bài, sửa bài.',
+  },
+  access: {
+    read: () => true,
+    create: isAdmin,
+    update: isAdmin,
+    delete: isAdmin,
+  },
+  fields: [
+    {
+      name: 'key',
+      type: 'text',
+      required: true,
+      unique: true,
+      defaultValue: 'default',
+      admin: {
+        description: 'Giữ giá trị default cho cấu hình chính của website.',
+      },
+    },
+    {
+      name: 'limits',
+      type: 'group',
+      label: 'Giới hạn bài đăng',
+      fields: [
+        {
+          name: 'maxImagesPerProperty',
+          type: 'number',
+          required: true,
+          min: 0,
+          max: 50,
+          defaultValue: DEFAULT_APP_CONFIG.maxImagesPerProperty,
+          admin: { description: 'Số ảnh tối đa user được gắn vào 1 tin BĐS.' },
+        },
+        {
+          name: 'maxVideosPerProperty',
+          type: 'number',
+          required: true,
+          min: 0,
+          max: 10,
+          defaultValue: DEFAULT_APP_CONFIG.maxVideosPerProperty,
+          admin: { description: 'Số video tối đa user được gắn vào 1 tin BĐS.' },
+        },
+        {
+          name: 'maxPendingPropertiesPerUser',
+          type: 'number',
+          required: true,
+          min: 1,
+          max: 500,
+          defaultValue: DEFAULT_APP_CONFIG.maxPendingPropertiesPerUser,
+          admin: { description: 'Số tin pending tối đa mỗi user có thể tạo.' },
+        },
+      ],
+    },
+    {
+      name: 'permissions',
+      type: 'group',
+      label: 'Quyền user',
+      fields: [
+        {
+          name: 'allowUserRegistration',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.allowUserRegistration,
+          label: 'Cho phép user tự tạo tài khoản',
+        },
+        {
+          name: 'allowGoogleLogin',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.allowGoogleLogin,
+          label: 'Cho phép user đăng nhập bằng Google/Gmail',
+        },
+        {
+          name: 'allowGoogleAutoCreateUser',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.allowGoogleAutoCreateUser,
+          label: 'Cho phép tự tạo user mới khi đăng nhập Google lần đầu',
+          admin: { description: 'Nếu tắt, Gmail chưa có tài khoản trong hệ thống sẽ không login được.' },
+        },
+        {
+          name: 'allowUserCreateProperty',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.allowUserCreateProperty,
+          label: 'Cho phép user đăng tin BĐS',
+        },
+        {
+          name: 'allowUserEditProperty',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.allowUserEditProperty,
+          label: 'Cho phép user chỉnh sửa tin của mình',
+        },
+        {
+          name: 'autoApproveUserProperties',
+          type: 'checkbox',
+          defaultValue: DEFAULT_APP_CONFIG.autoApproveUserProperties,
+          label: 'Tự động duyệt tin user đăng',
+          admin: { description: 'Production thường nên tắt. Nếu bật, tin user tạo sẽ approved ngay.' },
+        },
+      ],
+    },
+    {
+      name: 'notes',
+      type: 'textarea',
+      label: 'Ghi chú nội bộ',
+    },
+  ],
+}
