@@ -50,3 +50,26 @@ railway run yarn seed
 ## Notes
 
 If Railway reports exit code `137`, it means the runtime container was killed due to memory pressure. This build moves `next build` from runtime to Docker build and uses `next build --webpack` to reduce Turbopack-related memory spikes.
+
+
+## Admin UI CSS / hydration note
+
+This build imports Payload Admin CSS in `src/app/(payload)/layout.tsx`:
+
+```ts
+import '@payloadcms/next/css'
+```
+
+Make sure these Railway variables are base URLs only, without `/admin` or `/api` suffix:
+
+```env
+PAYLOAD_PUBLIC_SERVER_URL=https://your-service.up.railway.app
+NEXT_PUBLIC_SERVER_URL=https://your-service.up.railway.app
+```
+
+Wrong examples:
+
+```env
+PAYLOAD_PUBLIC_SERVER_URL=https://your-service.up.railway.app/admin
+NEXT_PUBLIC_SERVER_URL=https://your-service.up.railway.app/admin
+```
