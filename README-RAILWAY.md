@@ -1,114 +1,52 @@
 # Payload CMS Railway Deploy
 
-This package is the standalone Payload CMS admin service for the real-estate project.
+This package deploys only the Payload CMS admin/API service to Railway.
 
-## What is included
+## Railway settings
 
-- Payload CMS 3.84.1
-- Next.js 16.2.6
-- PostgreSQL adapter for Neon
-- Cloudflare R2 storage config
-- Real-estate collections: Users, Properties, Media, Districts, App Configs
-- Seed script with demo admin/user/properties/districts/media
-- Railway-ready Dockerfile and `railway.toml`
+- Builder: Dockerfile
+- Start command: `yarn start:railway`
+- The Docker image builds Next.js during Docker build.
+- Runtime only waits for Neon, bootstraps the Payload schema, then runs `next start`.
 
-## Railway setup
+## Required Railway variables
 
-Create a Railway service from this folder/repo.
-
-If deploying from the full monorepo, set:
-
-```txt
-Root Directory: apps/payload-admin
-```
-
-If deploying this zip as its own repository, the root directory is already correct.
-
-## Required variables
-
-Copy variables from `.env.railway.example` into Railway Variables.
-
-Minimum required:
+Set these in Railway → Service → Variables:
 
 ```env
-DATABASE_URL=postgresql://neondb_owner:<PASSWORD>@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
-DATABASE_URI=postgresql://neondb_owner:<PASSWORD>@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
-DIRECT_URL=postgresql://neondb_owner:<PASSWORD>@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require
-PAYLOAD_SECRET=change-me-to-a-long-random-secret
-PAYLOAD_PUBLIC_SERVER_URL=https://your-payload-service.up.railway.app
-NEXT_PUBLIC_SERVER_URL=https://your-payload-service.up.railway.app
+DATABASE_URL=postgresql://neondb_owner:<PASSWORD>@<POOLER_HOST>/neondb?sslmode=require
+DATABASE_URI=postgresql://neondb_owner:<PASSWORD>@<POOLER_HOST>/neondb?sslmode=require
+DIRECT_URL=postgresql://neondb_owner:<PASSWORD>@<DIRECT_HOST>/neondb?sslmode=require
+
+PAYLOAD_SECRET=change-me-long-random-secret
+PAYLOAD_PUBLIC_SERVER_URL=https://your-railway-domain.up.railway.app
+NEXT_PUBLIC_SERVER_URL=https://your-railway-domain.up.railway.app
+FRONTEND_URL=https://uat-agreement.tpbs.com.vn
+PUBLIC_API_PUBLIC_URL=https://api-uat-agreement.tpbs.com.vn
+CORS_ORIGINS=https://uat-agreement.tpbs.com.vn,https://api-uat-agreement.tpbs.com.vn,https://your-railway-domain.up.railway.app
+CSRF_ORIGINS=https://uat-agreement.tpbs.com.vn,https://api-uat-agreement.tpbs.com.vn,https://your-railway-domain.up.railway.app
 PAYLOAD_SCHEMA_PUSH_ON_START=true
 ```
 
-Railway provides `PORT` automatically. The app listens on `${PORT:-3000}`.
-
-## Build and start
-
-The Dockerfile installs dependencies. The Railway start command runs:
-
-```bash
-yarn start:railway
-```
-
-which does:
-
-```txt
-wait for Neon DB
-bootstrap Payload schema or run migrations
-next build
-next start using Railway PORT
-```
-
-For strict production, set:
+Optional R2 variables:
 
 ```env
-PAYLOAD_SCHEMA_PUSH_ON_START=false
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_PUBLIC_URL=
+R2_ENDPOINT=
 ```
 
-and use generated Payload migrations instead of schema bootstrap.
+## Seed demo data
 
-## Seed demo data on Railway
-
-After first deploy succeeds, run in Railway shell/CLI:
+After deployment succeeds:
 
 ```bash
-yarn seed
+railway run yarn seed
 ```
 
-Demo accounts:
+## Notes
 
-```txt
-Admin: admin@gmail.com / 123456
-User:  user@gmail.com / 123456
-```
-
-## Public API config
-
-If your NestJS Public API is deployed separately, set its env:
-
-```env
-PAYLOAD_INTERNAL_URL=https://your-payload-service.up.railway.app
-```
-
-Do not add `/api` at the end. The API code appends `/api/...` by itself.
-
-## Security note
-
-Do not commit real Neon or R2 secrets to Git. Rotate the Neon password if it has been pasted into chat or logs.
-
-
-## Railway Dockerfile note
-
-Dockerfile đã bỏ BuildKit cache mount (`--mount=type=cache`) để tránh lỗi Railway: `flag --mount=type=cache ... is missing an id argument`. Build sẽ dùng `RUN yarn install` thường, ổn định hơn trên Railway.
-
-## Payload CLI / Next 16 note
-
-This Railway build intentionally does **not** call `yarn payload migrate` at runtime.
-Payload 3.84.1 with Next 16.x can hit a `loadEnvConfig is not a function` error in the Payload CLI path.
-For this Railway template, startup uses:
-
-```bash
-node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn build && yarn start
-```
-
-So do not set `PAYLOAD_SCHEMA_PUSH_ON_START=false` for this Railway-only package unless you also add generated Payload migrations and verify the Payload CLI compatibility in your environment.
+If Railway reports exit code `137`, it means the runtime container was killed due to memory pressure. This build moves `next build` from runtime to Docker build and uses `next build --webpack` to reduce Turbopack-related memory spikes.

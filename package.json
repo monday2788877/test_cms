@@ -6,16 +6,16 @@
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
-    "start:docker": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn build && yarn start",
+    "start:docker": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn start",
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
     "seed": "tsx src/seed.ts",
     "postinstall": "node scripts/patch-payload-load-env.mjs",
     "payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload",
     "bootstrap:schema": "cross-env NODE_ENV=development NEXT_PHASE=phase-production-server tsx scripts/bootstrap-schema.ts",
-    "start:railway": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn build && yarn start"
+    "start:railway": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn start"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.84.1",
