@@ -100,3 +100,15 @@ Do not commit real Neon or R2 secrets to Git. Rotate the Neon password if it has
 ## Railway Dockerfile note
 
 Dockerfile đã bỏ BuildKit cache mount (`--mount=type=cache`) để tránh lỗi Railway: `flag --mount=type=cache ... is missing an id argument`. Build sẽ dùng `RUN yarn install` thường, ổn định hơn trên Railway.
+
+## Payload CLI / Next 16 note
+
+This Railway build intentionally does **not** call `yarn payload migrate` at runtime.
+Payload 3.84.1 with Next 16.x can hit a `loadEnvConfig is not a function` error in the Payload CLI path.
+For this Railway template, startup uses:
+
+```bash
+node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn build && yarn start
+```
+
+So do not set `PAYLOAD_SCHEMA_PUSH_ON_START=false` for this Railway-only package unless you also add generated Payload migrations and verify the Payload CLI compatibility in your environment.
