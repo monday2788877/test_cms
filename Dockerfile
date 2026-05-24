@@ -26,8 +26,7 @@ COPY package.json yarn.lock* ./
 # postinstall needs scripts/patch-payload-load-env.mjs during yarn install
 COPY scripts ./scripts
 
-RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
-    yarn install --non-interactive --network-timeout 600000
+RUN yarn install --non-interactive --network-timeout 600000
 
 COPY . .
 

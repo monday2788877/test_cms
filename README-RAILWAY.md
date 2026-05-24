@@ -95,3 +95,8 @@ Do not add `/api` at the end. The API code appends `/api/...` by itself.
 ## Security note
 
 Do not commit real Neon or R2 secrets to Git. Rotate the Neon password if it has been pasted into chat or logs.
+
+
+## Railway Dockerfile note
+
+Dockerfile đã bỏ BuildKit cache mount (`--mount=type=cache`) để tránh lỗi Railway: `flag --mount=type=cache ... is missing an id argument`. Build sẽ dùng `RUN yarn install` thường, ổn định hơn trên Railway.
