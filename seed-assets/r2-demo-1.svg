@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#14532d"/><stop offset="1" stop-color="#22c55e"/></linearGradient></defs>
+  <rect width="1200" height="800" fill="url(#g)"/>
+  <rect x="120" y="220" width="960" height="420" rx="40" fill="#ffffff" opacity="0.92"/>
+  <path d="M260 560h680V350L600 180 260 350z" fill="#064e3b" opacity="0.92"/>
+  <rect x="380" y="420" width="150" height="140" fill="#dcfce7"/>
+  <rect x="670" y="420" width="150" height="140" fill="#dcfce7"/>
+  <text x="600" y="710" text-anchor="middle" font-family="Arial" font-size="48" font-weight="700" fill="#fff">R2 DEMO IMAGE 1</text>
+</svg>
