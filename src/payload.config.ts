@@ -15,40 +15,52 @@ const dirname = path.dirname(filename)
 const r2Enabled = process.env.R2_ENABLED === 'true'
 
 const publicServerURL = process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-const corsOrigins = [
+const configuredOrigins = [
+  process.env.CORS_ORIGINS,
+  process.env.CSRF_ORIGINS,
+]
+  .filter(Boolean)
+  .flatMap((value) => String(value).split(',').map((origin) => origin.trim()).filter(Boolean))
+
+const corsOrigins = Array.from(new Set([
   'http://localhost:5173',
   'http://localhost:4000',
   publicServerURL,
   process.env.FRONTEND_URL,
+  process.env.PUBLIC_API_PUBLIC_URL,
   process.env.PUBLIC_API_URL,
   process.env.KONG_PUBLIC_URL,
-].filter(Boolean) as string[]
+  ...configuredOrigins,
+].filter(Boolean) as string[]))
 
-const plugins = []
+const r2Endpoint =
+  process.env.R2_ENDPOINT ||
+  (process.env.R2_ACCOUNT_ID
+    ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+    : undefined)
 
-if (r2Enabled) {
-  plugins.push(
-    s3Storage({
-      collections: {
-        media: true,
+const plugins = [
+  // Keep the plugin registered even when disabled so Payload can generate the
+  // admin importMap for @payloadcms/storage-s3/client#S3ClientUploadHandler.
+  // Railway builds may not have runtime R2 variables available at image-build
+  // time, so disabling by omitting the plugin can break the Admin UI.
+  s3Storage({
+    enabled: r2Enabled,
+    collections: {
+      media: true,
+    },
+    bucket: process.env.R2_BUCKET || 'disabled-r2-bucket',
+    config: {
+      endpoint: r2Endpoint,
+      region: process.env.R2_REGION || 'auto',
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || 'disabled',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || 'disabled',
       },
-      bucket: process.env.R2_BUCKET || '',
-      config: {
-        endpoint:
-          process.env.R2_ENDPOINT ||
-          (process.env.R2_ACCOUNT_ID
-            ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-            : undefined),
-        region: process.env.R2_REGION || 'auto',
-        forcePathStyle: true,
-        credentials: {
-          accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-        },
-      },
-    }),
-  )
-}
+    },
+  } as any),
+]
 
 export default buildConfig({
   serverURL: publicServerURL,
