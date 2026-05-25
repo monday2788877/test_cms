@@ -20,4 +20,4 @@ Important:
 - Do not put `/api`, `/admin`, or bucket path at the end of `R2_ENDPOINT`.
 - After changing R2 variables, redeploy the Railway service.
 
-This source runs `payload generate:importmap` before `next build`, and `src/app/(payload)/admin/importMap.js` also includes a static fallback for `@payloadcms/storage-s3/client#S3ClientUploadHandler`.
+This source writes a static Payload import map with `node scripts/write-importmap.mjs` before `next build`. It intentionally does not rely on `payload generate:importmap`, because the Payload CLI can overwrite the map or fail in this Payload/Next/Railway combo.

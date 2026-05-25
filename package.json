@@ -6,11 +6,11 @@
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
-    "build": "yarn generate:importmap && next build --webpack",
+    "build": "node scripts/write-importmap.mjs && next build --webpack",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "start:docker": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn start",
     "generate:types": "payload generate:types",
-    "generate:importmap": "payload generate:importmap",
+    "generate:importmap": "node scripts/write-importmap.mjs",
     "seed": "tsx src/seed.ts",
     "postinstall": "node scripts/patch-payload-load-env.mjs",
     "payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload",
