@@ -22,11 +22,18 @@ const configuredOrigins = [
   .filter(Boolean)
   .flatMap((value) => String(value).split(',').map((origin) => origin.trim()).filter(Boolean))
 
-const corsOrigins = Array.from(new Set([
+const defaultAllowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4000',
+  'https://uat-agreement.tpbs.com.vn',
+  'https://testcms-production.up.railway.app',
+]
+
+const corsOrigins = Array.from(new Set([
+  ...defaultAllowedOrigins,
   publicServerURL,
   process.env.FRONTEND_URL,
+  process.env.NEXT_PUBLIC_FRONTEND_URL,
   process.env.PUBLIC_API_PUBLIC_URL,
   process.env.PUBLIC_API_URL,
   process.env.KONG_PUBLIC_URL,
