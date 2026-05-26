@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "node scripts/write-importmap.mjs && next build --webpack",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "start": "node scripts/start-next-safe.mjs",
     "start:docker": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn start",
     "generate:types": "payload generate:types",
     "generate:importmap": "node scripts/write-importmap.mjs",
@@ -17,7 +17,8 @@
     "bootstrap:schema": "cross-env NODE_ENV=development PAYLOAD_DB_PUSH=true NEXT_PHASE=phase-production-server tsx scripts/bootstrap-schema.ts",
     "start:railway": "node scripts/wait-for-db.mjs && yarn bootstrap:schema && yarn start",
     "seed:r2": "tsx src/seed-r2.ts",
-    "seed:all": "yarn seed && yarn seed:r2"
+    "seed:all": "yarn seed && yarn seed:r2",
+    "start:raw": "next start -H 0.0.0.0 -p ${PORT:-3000}"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.84.1",

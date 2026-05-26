@@ -183,46 +183,61 @@ const deleteRelatedMedia: CollectionAfterDeleteHook = ({ doc, req }) => {
     return doc
   }
 
-  // Rất quan trọng: không dùng req.payload.delete() ngay trong hook.
-  // Payload/Drizzle/Postgres có thể giữ transaction context qua timer/AsyncLocalStorage,
-  // dẫn tới idle-in-transaction timeout khi xóa media/R2 chậm.
-  // Hook chỉ bắn một HTTP request nội bộ sang route cleanup riêng để chạy trong request/transaction mới,
-  // và không await để modal Delete của Payload Admin đóng ngay.
+  // Rất quan trọng: hook chỉ enqueue cleanup ở background và không await.
+  // Không dùng req.payload.delete() trong hook; không gọi network blocking trong transaction.
+  backgroundFetchJSON(
+    `${baseURL}/api/internal/property-media-cleanup`,
+    token,
+    { propertyId, mediaIds: ids },
+    `property-media-cleanup:${String(propertyId || '')}`,
+  )
+
+  return doc
+}
+
+function backgroundFetchJSON(url: string, token: string, body: Record<string, unknown>, label: string) {
+  const timeoutMs = Number(process.env.CMS_BACKGROUND_FETCH_TIMEOUT_MS || 5000)
+
   setTimeout(() => {
-    fetch(`${baseURL}/api/internal/property-media-cleanup`, {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Internal-Token': token,
       },
-      body: JSON.stringify({ propertyId, mediaIds: ids }),
-    }).catch((error) => {
-      console.error(`[property-media-cleanup] failed to enqueue property ${String(propertyId || '')}:`, error)
+      body: JSON.stringify(body),
+      signal: controller.signal,
     })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          console.error(`[${label}] failed with ${res.status}: ${text}`)
+        }
+      })
+      .catch((error) => {
+        console.error(`[${label}] failed:`, error)
+      })
+      .finally(() => clearTimeout(timer))
   }, 0)
-
-  return doc
 }
 
-const syncSearchIndex: CollectionAfterChangeHook = async ({ doc }) => {
+const syncSearchIndex: CollectionAfterChangeHook = ({ doc }) => {
   const enabled = process.env.SEARCH_SYNC_ENABLED !== 'false'
   const publicApiURL = process.env.PUBLIC_API_INTERNAL_URL || process.env.PUBLIC_API_URL || 'http://public-api:4000'
   const internalToken = process.env.INTERNAL_API_TOKEN || process.env.ADMIN_INTERNAL_TOKEN
   if (!enabled || !doc?.id || !publicApiURL || !internalToken) return doc
 
-  try {
-    await fetch(`${publicApiURL.replace(/\/$/, '')}/api/search/sync-property`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Token': internalToken,
-      },
-      body: JSON.stringify({ id: String(doc.id) }),
-    })
-  } catch (error) {
-    // Không chặn admin lưu tin nếu search index đang lỗi. Có thể reindex lại bằng endpoint ops.
-    console.error('Search sync failed:', error)
-  }
+  // Không await external HTTP trong Payload hook. Nếu public-api/search chậm hoặc lỗi,
+  // transaction/request của CMS admin có thể bị giữ lâu và dẫn tới idle-in-transaction timeout.
+  backgroundFetchJSON(
+    `${publicApiURL.replace(/\/$/, '')}/api/search/sync-property`,
+    internalToken,
+    { id: String(doc.id) },
+    'search-sync',
+  )
 
   return doc
 }

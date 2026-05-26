@@ -4,6 +4,24 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+const R2_DELETE_TIMEOUT_MS = Number(process.env.CMS_R2_DELETE_TIMEOUT_MS || 8000)
+const MEDIA_DELETE_TIMEOUT_MS = Number(process.env.CMS_MEDIA_DELETE_TIMEOUT_MS || 8000)
+
+async function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 type CleanupBody = {
   propertyId?: string | number
@@ -148,6 +166,8 @@ async function deleteR2Objects(keys: string[]): Promise<R2DeleteResult> {
   for (let index = 0; index < uniqueKeys.length; index += 1000) {
     const chunk = uniqueKeys.slice(index, index + 1000)
     try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), R2_DELETE_TIMEOUT_MS)
       const result = await setup.client.send(
         new DeleteObjectsCommand({
           Bucket: setup.bucket,
@@ -156,7 +176,8 @@ async function deleteR2Objects(keys: string[]): Promise<R2DeleteResult> {
             Objects: chunk.map((Key) => ({ Key })),
           },
         }),
-      )
+        { abortSignal: controller.signal },
+      ).finally(() => clearTimeout(timer))
 
       for (const item of result.Deleted || []) {
         if (item.Key) deletedKeys.push(item.Key)
@@ -214,13 +235,17 @@ export async function POST(request: Request) {
     try {
       let mediaDoc: any = null
       try {
-        mediaDoc = await payload.findByID({
-          collection: 'media',
-          id,
-          depth: 0,
-          overrideAccess: true,
-          disableTransaction: true,
-        } as any)
+        mediaDoc = await withTimeout(
+          payload.findByID({
+            collection: 'media',
+            id,
+            depth: 0,
+            overrideAccess: true,
+            disableTransaction: true,
+          } as any),
+          MEDIA_DELETE_TIMEOUT_MS,
+          `Timed out reading media ${String(id)} for cleanup`,
+        )
       } catch (error) {
         if (isNotFoundError(error)) {
           missing.push(id)
@@ -236,14 +261,18 @@ export async function POST(request: Request) {
       r2DeletedKeys.push(...r2Result.deletedKeys)
       r2FailedKeys.push(...r2Result.failedKeys.map((item) => ({ id, ...item })))
 
-      await payload.delete({
-        collection: 'media',
-        id,
-        overrideAccess: true,
-        // Không để xóa file media/R2 nằm trong transaction DB lâu.
-        // Tránh lỗi PostgreSQL idle-in-transaction timeout khi storage/network chậm.
-        disableTransaction: true,
-      } as any)
+      await withTimeout(
+        payload.delete({
+          collection: 'media',
+          id,
+          overrideAccess: true,
+          // Không để xóa file media/R2 nằm trong transaction DB lâu.
+          // Tránh lỗi PostgreSQL idle-in-transaction timeout khi storage/network chậm.
+          disableTransaction: true,
+        } as any),
+        MEDIA_DELETE_TIMEOUT_MS,
+        `Timed out deleting media ${String(id)} from Payload`,
+      )
       deleted.push(id)
     } catch (error) {
       if (isNotFoundError(error)) {

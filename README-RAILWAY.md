@@ -50,3 +50,14 @@ railway run yarn seed
 ## Notes
 
 If Railway reports exit code `137`, it means the runtime container was killed due to memory pressure. This build moves `next build` from runtime to Docker build and uses `next build --webpack` to reduce Turbopack-related memory spikes.
+
+## CMS stability notes
+
+Admin Dashboard and `/api/*` run inside the same Payload CMS service. If the CMS database pool or schema is unhealthy, both frontend API calls and the admin dashboard can fail. This deploy adds:
+
+- `/api/liveness`: cheap process check, no database.
+- `/api/health`: database-backed readiness check with hard timeouts.
+- a Next supervisor start script that exits the process on fatal Postgres states such as `idle-in-transaction timeout`, so Railway can restart automatically.
+- non-blocking Payload hooks for search sync and media cleanup, so admin save/delete requests are not held by slow external network calls.
+
+Manual restart fixing the issue means the process was stuck in a bad DB/runtime state. With the supervisor and healthcheck, Railway should recover without manual restart.
