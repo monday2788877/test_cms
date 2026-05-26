@@ -40,12 +40,19 @@ const isAdminOrOwner = ({ req }: any) => {
   return { owner: { equals: user.id } }
 }
 
+
+const mediaAdminThumbnail = ({ doc }: { doc?: any }) => {
+  // Prefer the original public URL for Admin thumbnails. Some old media were uploaded
+  // before sharp was configured, so generated thumb/card files may not exist and can 404.
+  return doc?.publicUrl || doc?.url || doc?.sizes?.thumb?.url || null
+}
+
 export const Media: CollectionConfig = {
   slug: 'media',
   upload: {
     staticDir: 'media',
     mimeTypes: ['image/*', 'video/*'],
-    adminThumbnail: 'thumb',
+    adminThumbnail: mediaAdminThumbnail as any,
     imageSizes: [
       { name: 'thumb', width: 320, height: 240, position: 'centre' },
       { name: 'card', width: 768, height: 576, position: 'centre' },

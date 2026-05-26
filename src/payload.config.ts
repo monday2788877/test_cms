@@ -4,6 +4,7 @@ import { buildConfig } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { s3Storage } from '@payloadcms/storage-s3'
+import sharp from 'sharp'
 import { Users } from './collections/Users'
 import { Media } from './collections/Media'
 import { Districts } from './collections/Districts'
@@ -73,6 +74,9 @@ const plugins = [
 ]
 
 export default buildConfig({
+  // Required by Payload when upload.imageSizes/admin thumbnails are enabled.
+  // Without this, CMS logs "sharp not installed" and generated thumbnails/card images may 404.
+  sharp,
   serverURL: publicServerURL,
   cors: corsOrigins,
   csrf: corsOrigins,
