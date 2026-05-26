@@ -1,4 +1,4 @@
-import type { Access, CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig } from 'payload'
+import type { Access, CollectionAfterChangeHook, CollectionAfterDeleteHook, CollectionBeforeChangeHook, CollectionConfig } from 'payload'
 import { DEFAULT_APP_CONFIG } from './AppConfigs'
 
 const FAIL_CLOSED_APP_CONFIG = {
@@ -130,6 +130,50 @@ async function countPendingProperties(req: any, userId: string | number) {
     overrideAccess: true,
   })
   return Number(result.totalDocs || 0)
+}
+
+
+function collectRelationIds(value: any): Array<string | number> {
+  if (!value) return []
+  const items = Array.isArray(value) ? value : [value]
+  return items
+    .map((item) => {
+      if (!item) return null
+      if (typeof item === 'string' || typeof item === 'number') return item
+      if (typeof item.id === 'string' || typeof item.id === 'number') return item.id
+      if (typeof item.value === 'string' || typeof item.value === 'number') return item.value
+      return null
+    })
+    .filter((id): id is string | number => id !== null)
+}
+
+const deleteRelatedMedia: CollectionAfterDeleteHook = async ({ doc, req }) => {
+  const mediaIds = new Map<string, string | number>()
+
+  for (const id of collectRelationIds(doc?.images)) {
+    mediaIds.set(String(id), id)
+  }
+  for (const id of collectRelationIds(doc?.videos)) {
+    mediaIds.set(String(id), id)
+  }
+
+  if (mediaIds.size === 0) return doc
+
+  for (const id of mediaIds.values()) {
+    try {
+      await req.payload.delete({
+        collection: 'media',
+        id,
+        overrideAccess: true,
+      })
+    } catch (error) {
+      // Property đã bị xóa rồi, nên không throw để tránh làm admin tưởng thao tác xóa thất bại.
+      // Media lỗi cleanup có thể xử lý lại bằng job dọn orphan media sau.
+      console.error(`Failed to delete media ${String(id)} after deleting property ${String(doc?.id || '')}:`, error)
+    }
+  }
+
+  return doc
 }
 
 const syncSearchIndex: CollectionAfterChangeHook = async ({ doc }) => {
@@ -281,6 +325,7 @@ export const Properties: CollectionConfig = {
   hooks: {
     beforeChange: [normalizeApprovalFlow],
     afterChange: [syncSearchIndex],
+    afterDelete: [deleteRelatedMedia],
   },
   fields: [
     { name: 'title', type: 'text', required: true },

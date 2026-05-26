@@ -13,6 +13,9 @@ import { AppConfigs } from './collections/AppConfigs'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 const r2Enabled = process.env.R2_ENABLED === 'true'
+// UAT/Railway safety: allow an explicit schema push before Next starts.
+// In strict production, set PAYLOAD_DB_PUSH=false and run Payload migrations instead.
+const dbPushEnabled = process.env.PAYLOAD_DB_PUSH === 'true' || (process.env.NODE_ENV !== 'production' && process.env.PAYLOAD_DB_PUSH !== 'false')
 
 const publicServerURL = process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
 const configuredOrigins = [
@@ -93,6 +96,7 @@ export default buildConfig({
     pool: {
       connectionString: process.env.DATABASE_URL || process.env.DATABASE_URI,
     },
+    push: dbPushEnabled,
     migrationDir: path.resolve(dirname, 'migrations'),
   }),
   plugins,
