@@ -18,6 +18,7 @@ const propertyStatuses = [
   { label: 'Approved / Public', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
   { label: 'Hidden', value: 'hidden' },
+  { label: 'Pending delete', value: 'pending_delete' },
 ] as const
 
 const isAdminUser = (user: any) => user?.role === 'admin'
@@ -147,6 +148,22 @@ function collectRelationIds(value: any): Array<string | number> {
     .filter((id): id is string | number => id !== null)
 }
 
+async function cleanupRelatedMediaInBackground(payload: any, propertyId: string | number | undefined, mediaIds: Array<string | number>) {
+  for (const id of mediaIds) {
+    try {
+      await payload.delete({
+        collection: 'media',
+        id,
+        overrideAccess: true,
+      })
+    } catch (error) {
+      // Bài đã được xóa thành công rồi. Không throw ở background cleanup để tránh làm CMS admin bị treo.
+      // Media cleanup lỗi có thể xử lý lại bằng job dọn orphan media sau.
+      console.error(`Failed to delete media ${String(id)} after deleting property ${String(propertyId || '')}:`, error)
+    }
+  }
+}
+
 const deleteRelatedMedia: CollectionAfterDeleteHook = async ({ doc, req }) => {
   const mediaIds = new Map<string, string | number>()
 
@@ -159,19 +176,16 @@ const deleteRelatedMedia: CollectionAfterDeleteHook = async ({ doc, req }) => {
 
   if (mediaIds.size === 0) return doc
 
-  for (const id of mediaIds.values()) {
-    try {
-      await req.payload.delete({
-        collection: 'media',
-        id,
-        overrideAccess: true,
-      })
-    } catch (error) {
-      // Property đã bị xóa rồi, nên không throw để tránh làm admin tưởng thao tác xóa thất bại.
-      // Media lỗi cleanup có thể xử lý lại bằng job dọn orphan media sau.
-      console.error(`Failed to delete media ${String(id)} after deleting property ${String(doc?.id || '')}:`, error)
-    }
-  }
+  // Không await xóa media ở đây. Payload Admin chỉ đóng modal sau khi afterDelete hoàn tất.
+  // Nếu R2/storage delete chậm hoặc treo, admin sẽ bị kẹt ở màn hình “Deleting...”.
+  // Vì vậy property delete trả kết quả ngay, còn media được cleanup async phía sau.
+  const payload = req.payload
+  const propertyId = doc?.id
+  const ids = Array.from(mediaIds.values())
+
+  setTimeout(() => {
+    void cleanupRelatedMediaInBackground(payload, propertyId, ids)
+  }, 0)
 
   return doc
 }
@@ -255,6 +269,10 @@ const normalizeApprovalFlow: CollectionBeforeChangeHook = async ({ req, operatio
     }
 
     if (operation === 'update') {
+      if (originalDoc?.status === 'pending_delete') {
+        throw new Error('Tin đang chờ admin duyệt xóa, user không thể chỉnh sửa hoặc gửi duyệt lại.')
+      }
+
       if (!appConfig.allowUserEditProperty) {
         throw new Error('Admin đang tắt chức năng user chỉnh sửa tin.')
       }
@@ -287,6 +305,12 @@ const normalizeApprovalFlow: CollectionBeforeChangeHook = async ({ req, operatio
 
     if (data.status === 'hidden') {
       data.publishedAt = null
+    }
+
+    if (data.status === 'pending_delete') {
+      data.publishedAt = null
+      data.rejectReason = null
+      data.rejectedAt = null
     }
   }
 
@@ -349,7 +373,7 @@ export const Properties: CollectionConfig = {
       defaultValue: 'pending',
       options: propertyStatuses as any,
       admin: {
-        description: 'User đăng tin sẽ vào pending, trừ khi App Config bật auto approve. Admin đổi sang approved để public.',
+        description: 'User đăng tin sẽ vào pending. User yêu cầu xóa sẽ vào pending_delete; admin review rồi xóa thật nếu đồng ý.',
       },
       access: {
         update: ({ req }) => isAdminUser(req.user),
@@ -440,5 +464,24 @@ export const Properties: CollectionConfig = {
     { name: 'rejectedAt', type: 'date' },
     { name: 'approvedBy', type: 'relationship', relationTo: 'users' },
     { name: 'publishedAt', type: 'date' },
+    {
+      name: 'deletionRequestedAt',
+      type: 'date',
+      label: 'Thời điểm user yêu cầu xóa',
+      admin: { condition: (_, siblingData) => siblingData?.status === 'pending_delete' },
+    },
+    {
+      name: 'deletionRequestedBy',
+      type: 'relationship',
+      relationTo: 'users',
+      label: 'User yêu cầu xóa',
+      admin: { condition: (_, siblingData) => siblingData?.status === 'pending_delete' },
+    },
+    {
+      name: 'deletionReason',
+      type: 'textarea',
+      label: 'Lý do user yêu cầu xóa',
+      admin: { condition: (_, siblingData) => siblingData?.status === 'pending_delete' },
+    },
   ],
 }
