@@ -65,6 +65,35 @@ function idsCount(value: any) {
   return value.filter(Boolean).length
 }
 
+function relationId(value: any) {
+  if (!value) return null
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (value.id) return String(value.id)
+  if (value.value) return String(value.value)
+  return null
+}
+
+async function mediaTotalBytes(req: any, value: any) {
+  if (!value) return 0
+  const items = Array.isArray(value) ? value : [value]
+  let total = 0
+  for (const item of items) {
+    if (item?.filesize) {
+      total += Number(item.filesize || 0)
+      continue
+    }
+    const id = relationId(item)
+    if (!id) continue
+    try {
+      const media = await req.payload.findByID({ collection: 'media', id, depth: 0, overrideAccess: true })
+      total += Number(media?.filesize || 0)
+    } catch {
+      // Payload will handle invalid relationship ids later; this guard only computes known filesize.
+    }
+  }
+  return total
+}
+
 async function getAppConfig(req: any) {
   try {
     const result = await req.payload.find({
@@ -140,6 +169,15 @@ const normalizeApprovalFlow: CollectionBeforeChangeHook = async ({ req, operatio
 
   if (idsCount(videos) > Number(appConfig.maxVideosPerProperty)) {
     throw new Error(`Một tin chỉ được phép có tối đa ${appConfig.maxVideosPerProperty} video.`)
+  }
+
+  const mb = 1024 * 1024
+  const [imageBytes, videoBytes] = await Promise.all([mediaTotalBytes(req, images), mediaTotalBytes(req, videos)])
+  if (imageBytes > Number(appConfig.maxImageUploadMbPerProperty) * mb) {
+    throw new Error(`Tổng dung lượng ảnh vượt quá ${appConfig.maxImageUploadMbPerProperty}MB/tin.`)
+  }
+  if (videoBytes > Number(appConfig.maxVideoUploadMbPerProperty) * mb) {
+    throw new Error(`Tổng dung lượng video vượt quá ${appConfig.maxVideoUploadMbPerProperty}MB/tin.`)
   }
 
   if (!data.slug && data.title) {

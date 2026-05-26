@@ -2,8 +2,10 @@ import type { CollectionBeforeChangeHook, CollectionConfig } from 'payload'
 import { isAdmin } from '../access/isAdmin'
 
 const MB = 1024 * 1024
-const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_UPLOAD_MB || 8) * MB
-const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_UPLOAD_MB || 80) * MB
+const MAX_IMAGE_UPLOAD_MB = Number(process.env.MAX_IMAGE_UPLOAD_MB || 0)
+const MAX_VIDEO_UPLOAD_MB = Number(process.env.MAX_VIDEO_UPLOAD_MB || 0)
+const MAX_IMAGE_BYTES = MAX_IMAGE_UPLOAD_MB > 0 ? MAX_IMAGE_UPLOAD_MB * MB : 0
+const MAX_VIDEO_BYTES = MAX_VIDEO_UPLOAD_MB > 0 ? MAX_VIDEO_UPLOAD_MB * MB : 0
 
 const setMediaOwner: CollectionBeforeChangeHook = ({ req, data, operation }) => {
   const user = req.user as any
@@ -12,11 +14,11 @@ const setMediaOwner: CollectionBeforeChangeHook = ({ req, data, operation }) => 
   }
   const mimeType = String(data.mimeType || '')
   const filesize = Number(data.filesize || 0)
-  if (filesize > 0 && mimeType.startsWith('image/') && filesize > MAX_IMAGE_BYTES) {
-    throw new Error(`Ảnh vượt quá giới hạn ${process.env.MAX_IMAGE_UPLOAD_MB || 8}MB.`)
+  if (MAX_IMAGE_BYTES > 0 && filesize > 0 && mimeType.startsWith('image/') && filesize > MAX_IMAGE_BYTES) {
+    throw new Error(`Ảnh vượt quá giới hạn ${MAX_IMAGE_UPLOAD_MB}MB/file.`)
   }
-  if (filesize > 0 && mimeType.startsWith('video/') && filesize > MAX_VIDEO_BYTES) {
-    throw new Error(`Video vượt quá giới hạn ${process.env.MAX_VIDEO_UPLOAD_MB || 80}MB.`)
+  if (MAX_VIDEO_BYTES > 0 && filesize > 0 && mimeType.startsWith('video/') && filesize > MAX_VIDEO_BYTES) {
+    throw new Error(`Video vượt quá giới hạn ${MAX_VIDEO_UPLOAD_MB}MB/file.`)
   }
 
   const publicBase = (process.env.R2_PUBLIC_URL || process.env.MEDIA_PUBLIC_URL || '').replace(/\/$/, '')
