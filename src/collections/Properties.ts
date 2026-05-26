@@ -148,23 +148,18 @@ function collectRelationIds(value: any): Array<string | number> {
     .filter((id): id is string | number => id !== null)
 }
 
-async function cleanupRelatedMediaInBackground(payload: any, propertyId: string | number | undefined, mediaIds: Array<string | number>) {
-  for (const id of mediaIds) {
-    try {
-      await payload.delete({
-        collection: 'media',
-        id,
-        overrideAccess: true,
-      })
-    } catch (error) {
-      // Bài đã được xóa thành công rồi. Không throw ở background cleanup để tránh làm CMS admin bị treo.
-      // Media cleanup lỗi có thể xử lý lại bằng job dọn orphan media sau.
-      console.error(`Failed to delete media ${String(id)} after deleting property ${String(propertyId || '')}:`, error)
-    }
-  }
+function cleanupEndpointBaseURL(req: any) {
+  const configured = process.env.CMS_INTERNAL_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || ''
+  if (configured) return configured.replace(/\/$/, '')
+
+  const host = req?.headers?.get?.('host')
+  const proto = req?.headers?.get?.('x-forwarded-proto') || 'http'
+  if (host) return `${proto}://${host}`
+
+  return ''
 }
 
-const deleteRelatedMedia: CollectionAfterDeleteHook = async ({ doc, req }) => {
+const deleteRelatedMedia: CollectionAfterDeleteHook = ({ doc, req }) => {
   const mediaIds = new Map<string, string | number>()
 
   for (const id of collectRelationIds(doc?.images)) {
@@ -176,15 +171,34 @@ const deleteRelatedMedia: CollectionAfterDeleteHook = async ({ doc, req }) => {
 
   if (mediaIds.size === 0) return doc
 
-  // Không await xóa media ở đây. Payload Admin chỉ đóng modal sau khi afterDelete hoàn tất.
-  // Nếu R2/storage delete chậm hoặc treo, admin sẽ bị kẹt ở màn hình “Deleting...”.
-  // Vì vậy property delete trả kết quả ngay, còn media được cleanup async phía sau.
-  const payload = req.payload
   const propertyId = doc?.id
   const ids = Array.from(mediaIds.values())
+  const token = process.env.CMS_INTERNAL_CLEANUP_TOKEN || process.env.INTERNAL_API_TOKEN || process.env.ADMIN_INTERNAL_TOKEN || ''
+  const baseURL = cleanupEndpointBaseURL(req)
 
+  if (!token || !baseURL) {
+    console.error(
+      `[property-media-cleanup] skipped for property ${String(propertyId || '')}: missing CMS_INTERNAL_CLEANUP_TOKEN/INTERNAL_API_TOKEN or CMS_INTERNAL_URL/PAYLOAD_PUBLIC_SERVER_URL`,
+    )
+    return doc
+  }
+
+  // Rất quan trọng: không dùng req.payload.delete() ngay trong hook.
+  // Payload/Drizzle/Postgres có thể giữ transaction context qua timer/AsyncLocalStorage,
+  // dẫn tới idle-in-transaction timeout khi xóa media/R2 chậm.
+  // Hook chỉ bắn một HTTP request nội bộ sang route cleanup riêng để chạy trong request/transaction mới,
+  // và không await để modal Delete của Payload Admin đóng ngay.
   setTimeout(() => {
-    void cleanupRelatedMediaInBackground(payload, propertyId, ids)
+    fetch(`${baseURL}/api/internal/property-media-cleanup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Token': token,
+      },
+      body: JSON.stringify({ propertyId, mediaIds: ids }),
+    }).catch((error) => {
+      console.error(`[property-media-cleanup] failed to enqueue property ${String(propertyId || '')}:`, error)
+    })
   }, 0)
 
   return doc
