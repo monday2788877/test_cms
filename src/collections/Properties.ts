@@ -74,6 +74,21 @@ function relationId(value: any) {
   return null
 }
 
+async function findMediaQuietly(req: any, id: string) {
+  try {
+    const result = await req.payload.find({
+      collection: 'media',
+      where: { id: { equals: id } },
+      limit: 1,
+      depth: 0,
+      overrideAccess: true,
+    })
+    return result?.docs?.[0] || null
+  } catch {
+    return null
+  }
+}
+
 async function mediaTotalBytes(req: any, value: any) {
   if (!value) return 0
   const items = Array.isArray(value) ? value : [value]
@@ -85,12 +100,10 @@ async function mediaTotalBytes(req: any, value: any) {
     }
     const id = relationId(item)
     if (!id) continue
-    try {
-      const media = await req.payload.findByID({ collection: 'media', id, depth: 0, overrideAccess: true })
-      total += Number(media?.filesize || 0)
-    } catch {
-      // Payload will handle invalid relationship ids later; this guard only computes known filesize.
-    }
+    // Không dùng findByID ở hook này. Nếu media cũ/orphan đã mất, findByID sẽ làm CMS log
+    // ERROR Not Found khi user edit bài. Query list endpoint thì fail mềm và không spam log 404.
+    const media = await findMediaQuietly(req, id)
+    total += Number(media?.filesize || 0)
   }
   return total
 }

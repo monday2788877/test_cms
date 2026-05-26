@@ -1,4 +1,4 @@
-import type { CollectionBeforeChangeHook, CollectionConfig } from 'payload'
+import type { CollectionAfterReadHook, CollectionBeforeChangeHook, CollectionConfig } from 'payload'
 import { isAdmin } from '../access/isAdmin'
 
 const MB = 1024 * 1024
@@ -6,6 +6,46 @@ const MAX_IMAGE_UPLOAD_MB = Number(process.env.MAX_IMAGE_UPLOAD_MB || 0)
 const MAX_VIDEO_UPLOAD_MB = Number(process.env.MAX_VIDEO_UPLOAD_MB || 0)
 const MAX_IMAGE_BYTES = MAX_IMAGE_UPLOAD_MB > 0 ? MAX_IMAGE_UPLOAD_MB * MB : 0
 const MAX_VIDEO_BYTES = MAX_VIDEO_UPLOAD_MB > 0 ? MAX_VIDEO_UPLOAD_MB * MB : 0
+
+function joinUrl(base: string, path: string) {
+  return `${base.replace(/\/$/, '')}/${String(path || '').replace(/^\//, '')}`
+}
+
+function mediaPublicBase() {
+  return (process.env.R2_PUBLIC_URL || process.env.MEDIA_PUBLIC_URL || '').replace(/\/$/, '')
+}
+
+function derivePublicUrlFromFilename(filename?: unknown) {
+  const base = mediaPublicBase()
+  const value = String(filename || '').trim()
+  if (!base || !value) return ''
+  return joinUrl(base, value)
+}
+
+function fillDerivedPublicUrls(doc: any) {
+  if (!doc) return doc
+  const originalPublicUrl = derivePublicUrlFromFilename(doc.filename)
+  if (originalPublicUrl && (!doc.publicUrl || String(doc.publicUrl).includes('/api/media/file/'))) {
+    doc.publicUrl = originalPublicUrl
+  }
+
+  if (doc.sizes && typeof doc.sizes === 'object') {
+    for (const size of Object.values(doc.sizes) as any[]) {
+      if (!size || typeof size !== 'object') continue
+      const sizePublicUrl = derivePublicUrlFromFilename(size.filename)
+      if (sizePublicUrl && (!size.publicUrl || String(size.publicUrl).includes('/api/media/file/'))) {
+        size.publicUrl = sizePublicUrl
+      }
+      if (sizePublicUrl && (!size.url || String(size.url).includes('/api/media/file/'))) {
+        size.url = sizePublicUrl
+      }
+    }
+  }
+
+  return doc
+}
+
+const deriveMediaPublicUrls: CollectionAfterReadHook = ({ doc }) => fillDerivedPublicUrls(doc)
 
 const setMediaOwner: CollectionBeforeChangeHook = ({ req, data, operation }) => {
   const user = req.user as any
@@ -21,9 +61,9 @@ const setMediaOwner: CollectionBeforeChangeHook = ({ req, data, operation }) => 
     throw new Error(`Video vượt quá giới hạn ${MAX_VIDEO_UPLOAD_MB}MB/file.`)
   }
 
-  const publicBase = (process.env.R2_PUBLIC_URL || process.env.MEDIA_PUBLIC_URL || '').replace(/\/$/, '')
-  if (publicBase && !data.publicUrl && data.filename) {
-    data.publicUrl = `${publicBase}/${data.filename}`
+  const publicUrl = derivePublicUrlFromFilename(data.filename)
+  if (publicUrl && (!data.publicUrl || String(data.publicUrl).includes('/api/media/file/'))) {
+    data.publicUrl = publicUrl
   }
   return data
 }
@@ -42,9 +82,10 @@ const isAdminOrOwner = ({ req }: any) => {
 
 
 const mediaAdminThumbnail = ({ doc }: { doc?: any }) => {
-  // Prefer the original public URL for Admin thumbnails. Some old media were uploaded
-  // before sharp was configured, so generated thumb/card files may not exist and can 404.
-  return doc?.publicUrl || doc?.url || doc?.sizes?.thumb?.url || null
+  // Prefer R2/CDN URL. Old media may only have local /api/media/file/* URL,
+  // which can 404 on Railway when files are stored on R2.
+  const normalized = fillDerivedPublicUrls({ ...(doc || {}) })
+  return normalized?.publicUrl || normalized?.sizes?.thumb?.publicUrl || normalized?.url || normalized?.sizes?.thumb?.url || null
 }
 
 export const Media: CollectionConfig = {
@@ -72,6 +113,7 @@ export const Media: CollectionConfig = {
   },
   hooks: {
     beforeChange: [setMediaOwner],
+    afterRead: [deriveMediaPublicUrls],
   },
   fields: [
     {
