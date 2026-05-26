@@ -186,7 +186,7 @@ const deleteRelatedMedia: CollectionAfterDeleteHook = ({ doc, req }) => {
   // Rất quan trọng: hook chỉ enqueue cleanup ở background và không await.
   // Không dùng req.payload.delete() trong hook; không gọi network blocking trong transaction.
   backgroundFetchJSON(
-    `${baseURL}/api/internal/property-media-cleanup`,
+    `${baseURL}/internal/property-media-cleanup`,
     token,
     { propertyId, mediaIds: ids },
     `property-media-cleanup:${String(propertyId || '')}`,
