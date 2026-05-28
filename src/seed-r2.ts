@@ -79,6 +79,7 @@ async function upsertAppConfig(payload: any) {
       maxImageUploadMbPerProperty: DEFAULT_APP_CONFIG.maxImageUploadMbPerProperty,
       maxVideoUploadMbPerProperty: DEFAULT_APP_CONFIG.maxVideoUploadMbPerProperty,
       maxPendingPropertiesPerUser: DEFAULT_APP_CONFIG.maxPendingPropertiesPerUser,
+      maxPropertiesPerUserPerDay: DEFAULT_APP_CONFIG.maxPropertiesPerUserPerDay,
     },
     permissions: {
       allowUserRegistration: DEFAULT_APP_CONFIG.allowUserRegistration,

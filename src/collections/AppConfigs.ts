@@ -14,6 +14,7 @@ export const DEFAULT_APP_CONFIG = {
   allowUserEditProperty: true,
   autoApproveUserProperties: false,
   maxPendingPropertiesPerUser: 20,
+  maxPropertiesPerUserPerDay: 5,
 }
 
 export const AppConfigs: CollectionConfig = {
@@ -94,6 +95,15 @@ export const AppConfigs: CollectionConfig = {
           max: 500,
           defaultValue: DEFAULT_APP_CONFIG.maxPendingPropertiesPerUser,
           admin: { description: 'Số tin pending tối đa mỗi user có thể tạo.' },
+        },
+        {
+          name: 'maxPropertiesPerUserPerDay',
+          type: 'number',
+          required: true,
+          min: 0,
+          max: 100,
+          defaultValue: DEFAULT_APP_CONFIG.maxPropertiesPerUserPerDay,
+          admin: { description: 'Số tin tối đa mỗi user được tạo trong 1 ngày theo múi giờ Việt Nam. Đặt 0 để chặn user tạo tin mới.' },
         },
       ],
     },

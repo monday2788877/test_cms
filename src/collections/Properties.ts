@@ -10,6 +10,7 @@ const FAIL_CLOSED_APP_CONFIG = {
   allowUserEditProperty: false,
   autoApproveUserProperties: false,
   maxPendingPropertiesPerUser: 0,
+  maxPropertiesPerUserPerDay: 0,
 }
 
 const propertyStatuses = [
@@ -137,6 +138,35 @@ async function countPendingProperties(req: any, userId: string | number) {
       and: [
         { owner: { equals: String(userId) } },
         { status: { equals: 'pending' } },
+      ],
+    },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  return Number(result.totalDocs || 0)
+}
+
+function vietnamDayRange(date = new Date()) {
+  const vietnamOffsetMs = 7 * 60 * 60 * 1000
+  const shifted = new Date(date.getTime() + vietnamOffsetMs)
+  const startUtcMs = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()) - vietnamOffsetMs
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000
+  return {
+    start: new Date(startUtcMs).toISOString(),
+    end: new Date(endUtcMs).toISOString(),
+  }
+}
+
+async function countPropertiesCreatedToday(req: any, userId: string | number) {
+  const { start, end } = vietnamDayRange()
+  const result = await req.payload.find({
+    collection: 'properties',
+    where: {
+      and: [
+        { owner: { equals: String(userId) } },
+        { createdAt: { greater_than_equal: start } },
+        { createdAt: { less_than: end } },
       ],
     },
     limit: 1,
@@ -295,6 +325,12 @@ const normalizeApprovalFlow: CollectionBeforeChangeHook = async ({ req, operatio
     if (operation === 'create') {
       if (!appConfig.allowUserCreateProperty) {
         throw new Error('Admin đang tắt chức năng user đăng tin.')
+      }
+
+      const dailyLimit = Number(appConfig.maxPropertiesPerUserPerDay)
+      const todayCount = await countPropertiesCreatedToday(req, user.id)
+      if (todayCount >= dailyLimit) {
+        throw new Error(`Bạn đã tạo ${todayCount} tin trong hôm nay. Giới hạn hiện tại là ${dailyLimit} tin/ngày.`)
       }
 
       const pendingCount = await countPendingProperties(req, user.id)
